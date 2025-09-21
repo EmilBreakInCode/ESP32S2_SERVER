@@ -2,6 +2,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>   // <-- добавлено
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -36,4 +37,3 @@ esp_err_t app_nvs_load_mac_ap (uint8_t mac_out[6], bool *present);
 #ifdef __cplusplus
 }
 #endif
-
