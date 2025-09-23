@@ -18,7 +18,11 @@ static void on_mqtt_target(const char *data, int len)
     const cJSON *j_id = cJSON_GetObjectItem(root, "deviceId");
     const char *devId = (cJSON_IsString(j_id) && j_id->valuestring) ? j_id->valuestring : NULL;
 
-    // round_numbers_2dec(root);  // ← убрать
+    // 👉 Делаем безопасную копию до удаления узла
+    char devIdSafe[64] = {0};
+    if (devId && *devId) {
+        strncpy(devIdSafe, devId, sizeof(devIdSafe)-1);
+    }
 
     // гарантируем t:"set"
     cJSON *jt = cJSON_GetObjectItem(root, "t");
@@ -28,22 +32,23 @@ static void on_mqtt_target(const char *data, int len)
         cJSON_ReplaceItemInObject(root, "t", cJSON_CreateString("set"));
     }
 
-    // deviceId удаляем перед ESPNOW (адресуем по MAC)
-    if (devId && devId[0]) {
+    // deviceId удаляем из полезной нагрузки (адресуем по MAC)
+    if (devIdSafe[0]) {
         cJSON_DeleteItemFromObjectCaseSensitive(root, "deviceId");
     }
 
     char *clean = cJSON_PrintUnformatted(root);
 
     esp_err_t se = ESP_OK;
-    if (!devId || !devId[0]) {
+    if (!devIdSafe[0]) {
         ESP_LOGW(TAG, "target without deviceId → broadcast");
         se = espnow_mgr_send_set_json(NULL, clean ? clean : data, (size_t)(clean ? strlen(clean) : len));
     } else {
-        ESP_LOGI(TAG, "forward target to deviceId=%s (ESP-NOW)", devId);
-        se = espnow_mgr_send_set_json(devId, clean ? clean : data, (size_t)(clean ? strlen(clean) : len));
+        ESP_LOGI(TAG, "forward target to deviceId=%s (ESP-NOW)", devIdSafe);
+        se = espnow_mgr_send_set_json(devIdSafe, clean ? clean : data, (size_t)(clean ? strlen(clean) : len));
     }
     ESP_LOGI(TAG, "espnow_mgr_send_set_json rc=%d", (int)se);
+
     if (clean) cJSON_free(clean);
     cJSON_Delete(root);
 }
