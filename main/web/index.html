@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RostClimat — настройка</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <h1>Настройка устройства</h1>
+
+    <div class="card">
+      <div class="kv">
+        <div>serverId:</div><div><code id="serverId">—</code></div>
+        <div>Статус STA:</div><div><span id="staStatus" class="muted">—</span></div>
+        <div>Подключен к SSID:</div><div><span id="staSsid" class="muted">—</span></div>
+        <div>IP адрес:</div><div><span id="staIp" class="muted">—</span></div>
+        <div>Текущий MAC STA:</div><div><span id="macStaAct" class="tiny">—</span></div>
+        <div>Текущий MAC AP:</div><div><span id="macApAct" class="tiny">—</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Wi-Fi</h2>
+      <div class="grid2">
+        <div>
+          <label>SSID</label>
+          <input id="ssid" placeholder="HomeWiFi"/>
+        </div>
+        <div>
+          <label>Пароль</label>
+          <input id="password" type="password" placeholder="••••••••"/>
+          <button class="btn-link" id="togglePwd">показать/скрыть</button>
+        </div>
+      </div>
+      <button id="btnWifi">Подключиться</button>
+      <div id="msgWifi" class="msg muted"></div>
+    </div>
+
+    <div class="card">
+      <h2>MQTT</h2>
+      <label>userLogin</label>
+      <input id="userLogin" placeholder="user123"/>
+      <button id="btnUser">Сохранить MQTT userLogin</button>
+      <div id="msgUser" class="msg muted"></div>
+    </div>
+
+    <div class="card">
+      <h2>MAC адреса</h2>
+      <div class="grid2">
+        <div>
+          <label>Пользовательский MAC STA</label>
+          <input id="macSta" placeholder="02:11:22:33:44:55"/>
+          <div class="hint">Должен быть unicast &amp; locally administered (бит0=0, бит1=1).</div>
+        </div>
+        <div>
+          <label>Пользовательский MAC AP</label>
+          <input id="macAp" placeholder="02:11:22:33:44:56"/>
+          <div class="hint">Оставьте пустым — вернётся к автогенерации от STA.</div>
+        </div>
+      </div>
+      <button id="btnMac">Сохранить MAC</button>
+      <div id="msgMac" class="msg muted"></div>
+    </div>
+  </div>
+
+  <script defer src="/app.js"></script>
+</body>
+</html>

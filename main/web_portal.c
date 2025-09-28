@@ -1,4 +1,4 @@
-//web_portal.c
+// web_portal.c
 #include "web_portal.h"
 #include <string.h>
 #include "esp_http_server.h"
@@ -15,10 +15,34 @@
 static const char *TAG = "web_portal";
 static httpd_handle_t s_server = NULL;
 
+/* ===== embedded static files =====
+ * Эти символы создаёт IDF при EMBED_FILES "web/index.html" "web/app.js" "web/style.css"
+ */
+extern const unsigned char _binary_index_html_start[] asm("_binary_index_html_start");
+extern const unsigned char _binary_index_html_end[]   asm("_binary_index_html_end");
+extern const unsigned char _binary_app_js_start[]     asm("_binary_app_js_start");
+extern const unsigned char _binary_app_js_end[]       asm("_binary_app_js_end");
+extern const unsigned char _binary_style_css_start[]  asm("_binary_style_css_start");
+extern const unsigned char _binary_style_css_end[]    asm("_binary_style_css_end");
+
+typedef struct {
+    const char *uri;
+    const unsigned char *start;
+    const unsigned char *end;
+    const char *ctype;
+} asset_t;
+
+static const asset_t s_assets[] = {
+    {"/",           _binary_index_html_start, _binary_index_html_end, "text/html; charset=utf-8"},
+    {"/index.html", _binary_index_html_start, _binary_index_html_end, "text/html; charset=utf-8"},
+    {"/app.js",     _binary_app_js_start,     _binary_app_js_end,     "application/javascript"},
+    {"/style.css",  _binary_style_css_start,  _binary_style_css_end,  "text/css"},
+};
+
 /* =================== Вспомогалки =================== */
 static void add_cors_headers(httpd_req_t *req) {
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
 }
 
@@ -50,161 +74,20 @@ static bool parse_mac_str(const char *s, uint8_t out[6]) {
     return true;
 }
 
-/* =================== HTML страница =================== */
-static const char INDEX_HTML[] =
-"<!doctype html><html lang='ru'><head><meta charset='utf-8'/>"
-"<meta name='viewport' content='width=device-width,initial-scale=1'/>"
-"<title>RostClimat — настройка</title>"
-"<style>"
-"body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;margin:0;background:#0b1020;color:#e6ecff}"
-".wrap{max-width:760px;margin:40px auto;padding:24px;border-radius:16px;background:#121936;box-shadow:0 10px 30px rgba(0,0,0,.4)}"
-"h1{font-size:20px;margin:0 0 16px}"
-"h2{font-size:16px;margin:18px 0 10px;color:#cfe0ff}"
-"label{display:block;margin:12px 0 6px;color:#9fb0ff}"
-"input{width:100%;padding:10px 12px;border:1px solid #2a3566;background:#0f1630;color:#e6ecff;border-radius:10px;outline:none}"
-"button{margin-top:12px;padding:10px 14px;border:0;border-radius:10px;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer}"
-"button:disabled{opacity:.6;cursor:not-allowed}"
-".grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}"
-".card{padding:12px;border:1px solid #23305e;border-radius:10px;background:#101838;margin:10px 0}"
-".muted{color:#9fb0ff;font-size:12px}.ok{color:#7CFC98}.bad{color:#ff8c7c}"
-".msg{margin-top:8px;font-size:14px}"
-".hint{font-size:12px;color:#9fb0ff;margin-top:4px}"
-".tiny{font-size:12px;opacity:.85}"
-".btn-link{background:transparent;color:#9fb0ff;border:0;cursor:pointer;padding:0;margin-left:8px;text-decoration:underline}"
-".kv{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;font-size:13px}"
-".kv div:nth-child(odd){color:#9fb0ff}"
-"</style></head><body><div class='wrap'>"
-"<h1>Настройка устройства</h1>"
-
-"<div class='card'>"
-" <div class='kv'>"
-"  <div>serverId:</div><div><code id='serverId'>—</code></div>"
-"  <div>Статус STA:</div><div><span id='staStatus' class='muted'>—</span></div>"
-"  <div>Подключен к SSID:</div><div><span id='staSsid' class='muted'>—</span></div>"
-"  <div>IP адрес:</div><div><span id='staIp' class='muted'>—</span></div>"
-"  <div>Текущий MAC STA:</div><div><span id='macStaAct' class='tiny'>—</span></div>"
-"  <div>Текущий MAC AP:</div><div><span id='macApAct' class='tiny'>—</span></div>"
-" </div>"
-"</div>"
-
-"<div class='card'>"
-" <h2>Wi-Fi</h2>"
-" <div class='grid2'>"
-"  <div><label>SSID</label><input id='ssid' placeholder='HomeWiFi'/></div>"
-"  <div><label>Пароль</label>"
-"   <input id='password' type='password' placeholder='••••••••'/>"
-"   <button class='btn-link' id='togglePwd'>показать/скрыть</button>"
-"  </div>"
-" </div>"
-" <button id='btnWifi'>Подключиться</button>"
-" <div id='msgWifi' class='msg muted'></div>"
-"</div>"
-
-"<div class='card'>"
-" <h2>MQTT</h2>"
-" <label>userLogin</label><input id='userLogin' placeholder='user123'/>"
-" <button id='btnUser'>Сохранить MQTT userLogin</button>"
-" <div id='msgUser' class='msg muted'></div>"
-"</div>"
-
-"<div class='card'>"
-" <h2>MAC адреса</h2>"
-" <div class='grid2'>"
-"  <div><label>Пользовательский MAC STA</label>"
-"   <input id='macSta' placeholder='02:11:22:33:44:55'/>"
-"   <div class='hint'>Должен быть unicast &amp; locally administered (бит0=0, бит1=1).</div>"
-"  </div>"
-"  <div><label>Пользовательский MAC AP</label>"
-"   <input id='macAp' placeholder='02:11:22:33:44:56'/>"
-"   <div class='hint'>Оставьте пустым — вернётся к автогенерации от STA.</div>"
-"  </div>"
-" </div>"
-" <button id='btnMac'>Сохранить MAC</button>"
-" <div id='msgMac' class='msg muted'></div>"
-"</div>"
-
-"<script>"
-"const macRe=/^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/;"
-"document.getElementById('togglePwd').onclick=function(e){e.preventDefault();const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';};"
-
-"async function load(){"
-"  try{const r=await fetch('/api/config');const j=await r.json();"
-"    document.getElementById('serverId').textContent=j.server?.serverId||'—';"
-"    document.getElementById('ssid').value=j.wifi?.ssid||'';"
-"    document.getElementById('userLogin').value=j.mqtt?.userLogin||'';"
-"    document.getElementById('staStatus').textContent=j.wifi?.connected?'Подключен':'Не подключен';"
-"    document.getElementById('staStatus').className=j.wifi?.connected?'ok':'bad';"
-"    document.getElementById('staSsid').textContent=j.wifi?.staSsid||'—';"
-"    document.getElementById('staIp').textContent=j.wifi?.ip||'—';"
-"    document.getElementById('macStaAct').textContent=j.mac?.activeSta||'—';"
-"    document.getElementById('macApAct').textContent=j.mac?.activeAp||'—';"
-"    document.getElementById('macSta').value=j.mac?.savedSta||'';"
-"    document.getElementById('macAp').value=j.mac?.savedAp||'';"
-"  }catch(e){console.error(e);}"
-"}"
-
-"async function wifiConnect(){"
-"  const btn=document.getElementById('btnWifi');btn.disabled=true;"
-"  const m=document.getElementById('msgWifi');m.textContent='';"
-"  const ssid=document.getElementById('ssid').value.trim();"
-"  const password=document.getElementById('password').value;"
-"  if(!ssid){m.textContent='Укажите SSID';btn.disabled=false;return;}"
-"  try{"
-"    const r=await fetch('/api/wifi_connect',{method:'POST',headers:{'Content-Type':'application/json'},"
-"      body:JSON.stringify({ssid,password})});"
-"    const j=await r.json();"
-"    m.textContent=(j.connected?'OK: IP получен':'Не удалось подключиться')+(j.connectReason?(' ('+j.connectReason+')'):'');"
-"    await load();"
-"  }catch(e){m.textContent='Ошибка: '+e;}"
-"  finally{btn.disabled=false;}"
-"}"
-
-"async function saveUser(){"
-"  const btn=document.getElementById('btnUser');btn.disabled=true;"
-"  const m=document.getElementById('msgUser');m.textContent='';"
-"  const userLogin=document.getElementById('userLogin').value.trim();"
-"  if(!userLogin){m.textContent='Укажите userLogin';btn.disabled=false;return;}"
-"  try{"
-"    const r=await fetch('/api/mqtt_user',{method:'POST',headers:{'Content-Type':'application/json'},"
-"      body:JSON.stringify({userLogin})});"
-"    const j=await r.json();"
-"    m.textContent=(j.ok?'Сохранено':'Ошибка')+(j.err?(' '+j.err):'');"
-"  }catch(e){m.textContent='Ошибка: '+e;}"
-"  finally{btn.disabled=false;}"
-"}"
-
-"async function saveMac(){"
-"  const btn=document.getElementById('btnMac');btn.disabled=true;"
-"  const m=document.getElementById('msgMac');m.textContent='';"
-"  const macSta=document.getElementById('macSta').value.trim();"
-"  const macAp=document.getElementById('macAp').value.trim();"
-"  if(macSta && !macRe.test(macSta)){m.textContent='Неверный формат MAC STA';btn.disabled=false;return;}"
-"  if(macAp && !macRe.test(macAp)){m.textContent='Неверный формат MAC AP';btn.disabled=false;return;}"
-"  try{"
-"    const r=await fetch('/api/mac',{method:'POST',headers:{'Content-Type':'application/json'},"
-"      body:JSON.stringify({staMac:macSta,apMac:macAp})});"
-"    const j=await r.json();"
-"    m.textContent=j.message||'OK';"
-"    if(j.reboot){m.textContent+=' Перезагрузка…';}"
-"  }catch(e){m.textContent='Ошибка: '+e;}"
-"  finally{btn.disabled=false;}"
-"}"
-
-"document.getElementById('btnWifi').addEventListener('click',wifiConnect);"
-"document.getElementById('btnUser').addEventListener('click',saveUser);"
-"document.getElementById('btnMac').addEventListener('click',saveMac);"
-"load();"
-"</script></div></body></html>";
-
 /* =================== JSON helpers =================== */
 static cJSON* read_json_body(httpd_req_t *req) {
     int total = req->content_len;
     if (total <= 0 || total > 4096) return NULL;
-    char *buf = (char*) malloc(total + 1);
+    char *buf = (char*)malloc(total + 1);
     if (!buf) return NULL;
-    int rcv = httpd_req_recv(req, buf, total);
-    if (rcv <= 0) { free(buf); return NULL; }
-    buf[total] = '\0';
+
+    int off = 0;
+    while (off < total) {
+        int r = httpd_req_recv(req, buf + off, total - off);
+        if (r <= 0) { free(buf); return NULL; }
+        off += r;
+    }
+    buf[off] = '\0';
     cJSON *json = cJSON_Parse(buf);
     free(buf);
     return json;
@@ -220,18 +103,28 @@ static const char* conn_result_to_str(wifi_mgr_conn_result_t r) {
     }
 }
 
-/* =================== Handlers =================== */
-
-static esp_err_t handle_index(httpd_req_t *req) {
-    add_cors_headers(req);
-    httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, INDEX_HTML, HTTPD_RESP_USE_STRLEN);
+/* =================== Static files handler =================== */
+static esp_err_t handle_static(httpd_req_t *req) {
+    const char *u = req->uri;
+    if (u[0] == '\0' || strcmp(u, "/") == 0) u = "/index.html";
+    for (size_t i=0;i<sizeof(s_assets)/sizeof(s_assets[0]);++i) {
+        if (strcmp(u, s_assets[i].uri) == 0) {
+            httpd_resp_set_type(req, s_assets[i].ctype);
+            httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+            size_t len = (size_t)(s_assets[i].end - s_assets[i].start);
+            return httpd_resp_send(req, (const char*)s_assets[i].start, len);
+        }
+    }
+    httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
+    return ESP_OK;
 }
 
 static esp_err_t handle_options(httpd_req_t *req) {
     add_cors_headers(req);
     return httpd_resp_send(req, NULL, 0);
 }
+
+/* =================== API Handlers =================== */
 
 static esp_err_t handle_get_config(httpd_req_t *req) {
     add_cors_headers(req);
@@ -380,7 +273,7 @@ static esp_err_t handle_post_mqtt_user(httpd_req_t *req) {
     return ESP_OK;
 }
 
-/* POST /api/mac  { staMac, apMac } — сохраняет MAC и ребутит при успехе */
+/* POST/PUT /api/mac  { staMac, apMac } — сохраняет MAC и ребутит при успехе */
 static esp_err_t handle_post_mac(httpd_req_t *req) {
     add_cors_headers(req);
     cJSON *root = read_json_body(req);
@@ -457,31 +350,27 @@ esp_err_t web_portal_start(void) {
     cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.stack_size = 6144; // чуть больше на cJSON
     cfg.max_resp_headers = 10;
+    cfg.max_uri_handlers = 16;   // дефолт 8 — может не хватить
+    cfg.lru_purge_enable = true;
 
     esp_err_t e = httpd_start(&s_server, &cfg);
     if (e != ESP_OK) return e;
 
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/", .method=HTTP_GET, .handler=handle_index });
+    /* --- API: OPTIONS --- */
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/config",       .method=HTTP_OPTIONS, .handler=handle_options });
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/wifi_connect", .method=HTTP_OPTIONS, .handler=handle_options });
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/mqtt_user",    .method=HTTP_OPTIONS, .handler=handle_options });
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/mac",          .method=HTTP_OPTIONS, .handler=handle_options });
 
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/config", .method=HTTP_OPTIONS, .handler=handle_options });
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/wifi_connect", .method=HTTP_OPTIONS, .handler=handle_options });
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/mqtt_user", .method=HTTP_OPTIONS, .handler=handle_options });
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/mac", .method=HTTP_OPTIONS, .handler=handle_options });
+    /* --- API: GET/POST/PUT --- */
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/config",       .method=HTTP_GET,  .handler=handle_get_config });
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/wifi_connect", .method=HTTP_POST, .handler=handle_post_wifi_connect });
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/mqtt_user",    .method=HTTP_POST, .handler=handle_post_mqtt_user });
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/mac",          .method=HTTP_POST, .handler=handle_post_mac });
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/api/mac",          .method=HTTP_PUT,  .handler=handle_post_mac });
 
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/config", .method=HTTP_GET, .handler=handle_get_config });
-
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/wifi_connect", .method=HTTP_POST, .handler=handle_post_wifi_connect });
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/mqtt_user", .method=HTTP_POST, .handler=handle_post_mqtt_user });
-    httpd_register_uri_handler(s_server, &(httpd_uri_t){
-        .uri="/api/mac", .method=HTTP_POST, .handler=handle_post_mac });
+    /* --- Static (после API!), wildcard --- */
+    httpd_register_uri_handler(s_server, &(httpd_uri_t){ .uri="/*", .method=HTTP_GET, .handler=handle_static });
 
     ESP_LOGI(TAG, "Web portal started on :%u", cfg.server_port);
     return ESP_OK;

@@ -9,9 +9,16 @@ idf_component_register(
     "espnow_manager.c"
     "device_registry.c"
     "mqtt_bridge.c"
-   
     "factory_reset.c"
-  INCLUDE_DIRS "include"
+
+  INCLUDE_DIRS 
+    "include"
+
+  EMBED_FILES 
+    "web/index.html" 
+    "web/app.js" 
+    "web/style.css"
+
   REQUIRES
     esp_tinyusb
     tinyusb
