@@ -9,7 +9,7 @@ idf_component_register(
     "espnow_manager.c"
     "device_registry.c"
     "mqtt_bridge.c"
-    "rc_model_json.c"
+   
     "factory_reset.c"
   INCLUDE_DIRS "include"
   REQUIRES

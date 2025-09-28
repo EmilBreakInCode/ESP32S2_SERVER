@@ -7,7 +7,7 @@
 #include "freertos/task.h"
 
 #include "usb_cdc_init.h"
-
+#include "esp_wifi.h"
 #include "wifi_manager.h"
 #include "web_portal.h"
 #include "mqtt_manager.h"
@@ -84,6 +84,12 @@ void app_main(void)
 
     registry_init(server_id, user_login);
     espnow_mgr_start();
+    espnow_mgr_set_polling(true, 3000);
+
+    uint8_t ch = 1;
+    wifi_second_chan_t sec = WIFI_SECOND_CHAN_NONE;
+    ESP_ERROR_CHECK(esp_wifi_get_channel(&ch, &sec));
+    ESP_LOGI("MAIN", "Wi-Fi current channel=%u (sec=%d)", (unsigned)ch, (int)sec);
 
     const char *BROKER_URI="mqtts://mqtt.rostclimat.ru:8883";
     const char *MQTT_USER ="devices";
@@ -94,4 +100,6 @@ void app_main(void)
     mqtt_bridge_attach();
 
     ESP_LOGI("MAIN", "Started. serverId=%s userLogin=%s", server_id, user_login);
+
+    
 }

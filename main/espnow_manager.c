@@ -451,6 +451,8 @@ esp_err_t espnow_mgr_start(void)
     wifi_second_chan_t sec = WIFI_SECOND_CHAN_NONE;  // v5 fix
     esp_wifi_get_channel(&ch, &sec);
     ESP_LOGI(TAG, "ESPNOW started (Wi-Fi ch=%u, push-only)", (unsigned)ch);
+    ESP_LOGI(TAG, "sizeof(rc_frag_hdr_t)=%u, RC_MAX_CHUNK=%u",
+         (unsigned)sizeof(rc_frag_hdr_t), (unsigned)RC_MAX_CHUNK);
     return ESP_OK;
 }
 
