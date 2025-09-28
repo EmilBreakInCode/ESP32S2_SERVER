@@ -7,7 +7,8 @@
 #include "esp_netif.h"
 #include "esp_log.h"
 #include "cJSON.h"
-
+#include <stdio.h>        // snprintf
+#include "esp_system.h"   // esp_restart
 #include "app_nvs.h"
 #include "wifi_manager.h"
 

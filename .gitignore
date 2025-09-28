@@ -1,0 +1,33 @@
+# Игнорировать директории сборки
+/build/
+/.vscode/
+
+# Игнорировать временные файлы IDE
+.idea/
+/*.iml
+*.swp
+
+# Игнорировать конфигурации SDK и другие временные файлы
+sdkconfig
+sdkconfig.old
+sdkconfig.defaults
+*.log
+
+# Игнорировать файлы подмодулей (если есть)
+components/arduino/
+
+# Игнорировать сгенерированные файлы
+CMakeFiles/
+CMakeCache.txt
+Makefile
+*.bin
+*.elf
+*.map
+*.d
+*.a
+
+# Игнорировать кэшированные файлы и файлы сборки
+*.o
+*.d
+*.obj
+*.out

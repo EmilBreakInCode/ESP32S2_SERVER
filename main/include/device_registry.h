@@ -3,19 +3,25 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "rc_model.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** Инициализация реестра устройств на сервере. */
+/** Инициализация реестра устройств на сервере (метаданные только для справки). */
 void registry_init(const char *serverId, const char *userLogin);
 
-/** Обновить/создать устройство по deviceId и применить состояние (из rc_model_json). */
-void registry_apply_state(const rc_device_state_t *st);
+/**
+ * Сохранить/обновить «сырое» состояние устройства.
+ * Мы НЕ парсим JSON: просто запоминаем deviceId и последний полученный raw-пакет (для диагностики/веба).
+ */
+void registry_apply_state(const char *deviceId, const char *raw_json, size_t raw_len);
 
-/** Собрать JSON для публикации в MQTT /state (возвращает длину, 0 — нечего). */
+/**
+ * Собрать лёгкий JSON для MQTT /state или веб-диагностики БЕЗ вложенного парсинга полей устройств.
+ * Формат: {"serverId":"...","devices":[{"deviceId":"..."}...]}
+ * Возвращает длину. Если буфера не хватает — 0.
+ */
 size_t registry_build_state_json(char *buf, size_t cap);
 
 /** Хелпер: сколько устройств сейчас известно. */
