@@ -1,0 +1,27 @@
+idf_component_register(
+  SRCS
+    "main.c"
+    "usb_cdc_init.c"
+    "wifi_manager.c"
+    "app_nvs.c"
+    "web_portal.c"
+    "mqtt_manager.c"
+    "espnow_manager.c"
+    "device_registry.c"
+    "mqtt_bridge.c"
+    "rc_model_json.c"
+    "factory_reset.c"
+  INCLUDE_DIRS "include"
+  REQUIRES
+    esp_tinyusb
+    tinyusb
+    driver
+    esp_http_server
+    esp_wifi
+    esp_netif
+    esp_event
+    nvs_flash
+    mqtt
+    json
+    esp_timer
+)
