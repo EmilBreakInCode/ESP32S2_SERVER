@@ -19,6 +19,7 @@
 #include "esp_mac.h"
 #include "esp_log.h"
 #include "lwip/apps/sntp.h"
+#include "internal_device.h"   // <<< НОВОЕ
 
 // === ВНЕ app_main, ГЛОБАЛЬНО ===
 static void start_sntp_once(void) {
@@ -26,16 +27,16 @@ static void start_sntp_once(void) {
     if (inited) return;
 
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "pool.ntp.org");  // можно свой NTP
-    sntp_init();                             // <-- правильный вызов для lwIP SNTP
+    sntp_setservername(0, "pool.ntp.org");
+    sntp_init();
 
     inited = true;
 }
 
 void app_main(void)
 {
-    usb_cdc_init();                      // поднять CDC и привязать консоль к USB
-    vTaskDelay(pdMS_TO_TICKS(100));      // маленький запас
+    usb_cdc_init();
+    vTaskDelay(pdMS_TO_TICKS(100));
 
     ESP_ERROR_CHECK(app_nvs_init());
     factory_reset_start(NULL);
@@ -48,15 +49,15 @@ void app_main(void)
     app_nvs_load_wifi(ssid, sizeof(ssid), pass, sizeof(pass), &has_pass);
 
     if (ssid[0]) {
-        wifi_mgr_err_t w = wifi_mgr_connect_sta(ssid, has_pass ? pass : "", 10000); // ждём до 10 сек
+        wifi_mgr_err_t w = wifi_mgr_connect_sta(ssid, has_pass ? pass : "", 10000);
         if (w != WIFI_MGR_OK) {
             ESP_LOGW("MAIN", "STA connect failed: %d (reason=%d)", w, wifi_mgr_get_last_result());
         }
     }
 
     if (wifi_mgr_sta_has_ip()) {
-        start_sntp_once();                      // <- ВЫЗОВ SNTP ЗДЕСЬ
-        vTaskDelay(pdMS_TO_TICKS(500));         // дать времени на синхронизацию
+        start_sntp_once();
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
     // ========================================================
 
@@ -95,11 +96,17 @@ void app_main(void)
     const char *MQTT_USER ="devices";
     const char *MQTT_PASS ="Dev1ce5213!@GEX";
 
-    // MQTT запускаем только после попытки получить IP и (по возможности) SNTP
     mqtt_mgr_start(BROKER_URI, MQTT_USER, MQTT_PASS, user_login, server_id);
     mqtt_bridge_attach();
 
-    ESP_LOGI("MAIN", "Started. serverId=%s userLogin=%s", server_id, user_login);
+    // ==== ВНУТРЕННЕЕ УСТРОЙСТВО: инициализация + запуск (если включено профилем) ====
+    internal_dev_init();
+    if (internal_dev_is_enabled()) {
+        internal_dev_start();
+        ESP_LOGI("MAIN", "Internal device enabled: %s", internal_dev_id());
+    } else {
+        ESP_LOGI("MAIN", "Internal device disabled (no internal_profile.h)");
+    }
 
-    
+    ESP_LOGI("MAIN", "Started. serverId=%s userLogin=%s", server_id, user_login);
 }

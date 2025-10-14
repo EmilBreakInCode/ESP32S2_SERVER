@@ -10,6 +10,7 @@ idf_component_register(
     "device_registry.c"
     "mqtt_bridge.c"
     "factory_reset.c"
+    "internal_device.c"
 
   INCLUDE_DIRS 
     "include"

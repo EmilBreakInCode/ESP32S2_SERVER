@@ -4,9 +4,9 @@
 #include "cJSON.h"
 #include "espnow_manager.h"
 #include <string.h>
+#include "internal_device.h"  // <<< НОВОЕ
 
 static const char *TAG = "mqtt_bridge";
-
 
 /* ===== обработчик входящих таргетов из .../target ===== */
 static void on_mqtt_target(const char *data, int len)
@@ -18,12 +18,22 @@ static void on_mqtt_target(const char *data, int len)
     const cJSON *j_id = cJSON_GetObjectItem(root, "deviceId");
     const char *devId = (cJSON_IsString(j_id) && j_id->valuestring) ? j_id->valuestring : NULL;
 
-    // 👉 Делаем безопасную копию до удаления узла
+    // 👉 Копия до модификаций
     char devIdSafe[64] = {0};
-    if (devId && *devId) {
-        strncpy(devIdSafe, devId, sizeof(devIdSafe)-1);
+    if (devId && *devId) strncpy(devIdSafe, devId, sizeof(devIdSafe)-1);
+
+    // ====== Внутреннее устройство: если deviceId — наше, обрабатываем локально
+    if (internal_dev_is_enabled() && devIdSafe[0] &&
+        strcmp(devIdSafe, internal_dev_id()) == 0)
+    {
+        ESP_LOGI(TAG, "target for INTERNAL deviceId=%s → handle locally", devIdSafe);
+        // Ничего не переписываем — отдадим как есть
+        internal_dev_on_mqtt_target(data, (size_t)len);
+        cJSON_Delete(root);
+        return;
     }
 
+    // ====== Иначе — это внешний спутник → превратим payload в set и шлём по espNOW
     // гарантируем t:"set"
     cJSON *jt = cJSON_GetObjectItem(root, "t");
     if (!cJSON_IsString(jt)) {
@@ -91,7 +101,7 @@ void mqtt_bridge_attach(void)
 {
     mqtt_mgr_set_handler(on_mqtt_target);
 
-    /* Отключаем периодический агрегат под /state (push-only per-device). */
+    /* Оставляем push-only (спутники сами пушат /state, а internal_dev публикует напрямую) */
     mqtt_mgr_set_state_provider(NULL);
 
     espnow_mgr_set_callbacks(on_hello, on_state_json, on_target_json);
